@@ -1,0 +1,100 @@
+/* ============================================================
+   DM BOARD — Theme System
+   Each campaign picks a theme. CSS custom properties cascade
+   from the campaign container. No single "default" look.
+   ============================================================ */
+
+/* --- Taberna (warm, cozy, fantasy tavern) --- */
+[data-theme="taberna"] {
+  --bg-primary: #f5f0e8;
+  --bg-secondary: #ede4d3;
+  --bg-tertiary: #e0d5c0;
+  --text-primary: #3d3226;
+  --text-secondary: #6b5d4f;
+  --accent: #c4823e;
+  --accent-hover: #a0682e;
+  --danger: #c0392b;
+  --success: #5d8c4a;
+  --border: #c4b59a;
+  --shadow: rgba(61, 50, 38, 0.12);
+  --heading-font: 'Crimson Text', 'Georgia', serif;
+  --body-font: 'Lato', 'Segoe UI', system-ui, sans-serif;
+  --number-font: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* --- Tormenta (steel blue, tactical, modern/scifi) --- */
+[data-theme="tormenta"] {
+  --bg-primary: #e8edf2;
+  --bg-secondary: #d4dce4;
+  --bg-tertiary: #c0cad4;
+  --text-primary: #1a2332;
+  --text-secondary: #4a5568;
+  --accent: #3b6fa0;
+  --accent-hover: #2c5580;
+  --danger: #c44536;
+  --success: #3d825e;
+  --border: #a0b0c0;
+  --shadow: rgba(26, 35, 50, 0.10);
+  --heading-font: 'Oswald', 'Impact', sans-serif;
+  --body-font: 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+  --number-font: 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+}
+
+/* --- Verdad (forest green, elegant, fey/nature) --- */
+[data-theme="verdad"] {
+  --bg-primary: #f2f6f0;
+  --bg-secondary: #e4ede0;
+  --bg-tertiary: #d0dcc8;
+  --text-primary: #1e2e1a;
+  --text-secondary: #4a5a40;
+  --accent: #5b8c4e;
+  --accent-hover: #407036;
+  --danger: #b8443a;
+  --success: #4a8c5e;
+  --border: #a8c098;
+  --shadow: rgba(30, 46, 26, 0.10);
+  --heading-font: 'Sorts Mill Goudy', 'Garamond', serif;
+  --body-font: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --number-font: 'JetBrains Mono', 'Cascadia Code', monospace;
+}
+
+/* --- Sombra (deep purple/navy, gold accents, gothic) --- */
+[data-theme="sombra"] {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #232344;
+  --bg-tertiary: #2d2d54;
+  --text-primary: #e4dce8;
+  --text-secondary: #a098b0;
+  --accent: #c9a84c;
+  --accent-hover: #a8883a;
+  --danger: #d4454a;
+  --success: #5aac6e;
+  --border: #3d3d60;
+  --shadow: rgba(0, 0, 0, 0.30);
+  --heading-font: 'Cinzel', 'Garamond', serif;
+  --body-font: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --number-font: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* --- Fuego (warm reds, dark grays, infernal/underdark) --- */
+[data-theme="fuego"] {
+  --bg-primary: #1e1818;
+  --bg-secondary: #2a2020;
+  --bg-tertiary: #382828;
+  --text-primary: #e8dcd4;
+  --text-secondary: #a89888;
+  --accent: #d4653a;
+  --accent-hover: #b8482a;
+  --danger: #e04040;
+  --success: #5a9850;
+  --border: #4a3838;
+  --shadow: rgba(0, 0, 0, 0.35);
+  --heading-font: 'Alegreya', 'Georgia', serif;
+  --body-font: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --number-font: 'Fira Code', 'JetBrains Mono', monospace;
+}
+
+/* --- Custom: user picks their own values via JS --- */
+[data-theme="custom"] {
+  /* Set by JavaScript at runtime */
+}

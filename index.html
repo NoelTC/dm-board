@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="taberna">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DM Board — Tablero de Combate</title>
+
+  <!-- Fonts (loaded from CDN, fallback to system) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&family=Lato:wght@400;500;600;700&family=Oswald:wght@500;600&family=Source+Sans+3:wght@400;500;600&family=Sorts+Mill+Goudy&family=Nunito:wght@400;500;600&family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600&family=Alegreya:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/themes.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
+</head>
+<body>
+
+<div id="app">
+  <!-- Header -->
+  <header class="app-header">
+    <h1 style="font-size:1.2rem;margin:0;white-space:nowrap">🎯 DM Board</h1>
+
+    <div class="campaign-selector">
+      <select id="campaign-select" aria-label="Seleccionar campaña"></select>
+      <button class="btn btn-sm btn-secondary" id="btn-new-campaign" title="Nueva campaña">+</button>
+      <button class="btn btn-sm btn-secondary" id="btn-rename-campaign" title="Renombrar">✎</button>
+      <button class="btn btn-sm btn-danger" id="btn-delete-campaign" title="Eliminar campaña">🗑</button>
+    </div>
+
+    <div style="display:flex;gap:0.4rem;align-items:center">
+      <button class="btn btn-sm btn-secondary" id="btn-toggle-theme" title="Cambiar tema">🎨</button>
+    </div>
+  </header>
+
+  <!-- Main Area -->
+  <div class="app-main">
+    <!-- Board -->
+    <div class="board-area" id="board-area">
+      <div class="board-empty">
+        <div style="font-size:2.5rem">🎯</div>
+        <div>Añade criaturas con el botón <strong>"+ Criatura"</strong></div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <!-- Toolbar -->
+      <div class="board-toolbar">
+        <button class="btn btn-primary" id="btn-add-token">＋ Criatura</button>
+        <button class="btn btn-sm btn-secondary" id="btn-toggle-size" title="Expandir/Compactar todas las imágenes">⤢ Expandir</button>
+        <span style="font-size:0.7rem;color:var(--text-secondary);align-self:center;margin-left:auto">
+          ✎ editar • ⤢ click en imagen
+        </span>
+      </div>
+
+      <!-- Sidebar Tabs -->
+      <div class="sidebar-tabs">
+        <button class="tab-btn active" data-tab="tab-combat">⚔️ Combate</button>
+        <button class="tab-btn" data-tab="tab-prep">🗺️ Prep & Almacén</button>
+      </div>
+
+      <!-- Theme Picker (hidden by default) -->
+      <div class="panel-card" id="theme-panel" style="display:none">
+        <h3>🎨 Tema de Campaña</h3>
+        <div id="theme-picker"></div>
+      </div>
+
+      <!-- Tab Content 1: Combat -->
+      <div class="tab-content" id="tab-combat">
+        <!-- Players -->
+        <div class="panel-card" id="players-panel">
+          <h3>👥 Jugadores</h3>
+          <div style="color:var(--text-secondary);font-size:0.85rem">Cargando...</div>
+        </div>
+
+        <!-- Initiative -->
+        <div class="panel-card" id="initiative-panel">
+          <h3>⚔️ Iniciativa</h3>
+          <div style="color:var(--text-secondary);font-size:0.85rem">Cargando...</div>
+        </div>
+      </div>
+
+      <!-- Tab Content 2: Prep & Vault -->
+      <div class="tab-content" id="tab-prep" style="display:none">
+        <!-- Locations -->
+        <div class="panel-card" id="locations-panel">
+          <h3>🗺️ Localizaciones</h3>
+          <div style="color:var(--text-secondary);font-size:0.85rem">Cargando...</div>
+        </div>
+
+        <!-- Vault -->
+        <div class="panel-card" id="vault-panel">
+          <h3>📁 Almacén de Criaturas</h3>
+          <div style="color:var(--text-secondary);font-size:0.85rem">Cargando...</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
