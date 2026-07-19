@@ -20,6 +20,23 @@
 </head>
 <body>
 
+  <!-- Fallback warning for file:// protocol (CORS blocks ES modules) -->
+  <script>
+    if (window.location.protocol === 'file:') {
+      document.addEventListener('DOMContentLoaded', () => {
+        const warning = document.createElement('div');
+        warning.style.cssText = 'background: #c0392b; color: white; padding: 12px; text-align: center; font-weight: bold; font-family: sans-serif; position: fixed; top: 0; left: 0; right: 0; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.2);';
+        warning.innerHTML = '⚠️ <strong>DM Board:</strong> No se pueden cargar los módulos JavaScript directamente desde un archivo local (CORS). Por favor, ejecuta la aplicación usando un servidor local (p. ej. ejecutando <code>./start.sh</code> o <code>python3 -m http.server 8080</code>) y ábrela en <a href="http://localhost:8080" style="color: #5decff; text-decoration: underline;">http://localhost:8080</a>.';
+        document.body.insertBefore(warning, document.body.firstChild);
+      });
+    }
+  </script>
+  <noscript>
+    <div style="background: #c0392b; color: white; padding: 12px; text-align: center; font-weight: bold; font-family: sans-serif; position: fixed; top: 0; left: 0; right: 0; z-index: 9999;">
+      ⚠️ <strong>DM Board:</strong> Esta aplicación requiere JavaScript para funcionar. Por favor, actívalo en tu navegador.
+    </div>
+  </noscript>
+
 <div id="app">
   <!-- Header -->
   <header class="app-header">

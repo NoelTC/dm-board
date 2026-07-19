@@ -729,7 +729,7 @@ function initLangToggle() {
 }
 
 /* ---- Init ---- */
-function init() {
+async function init() {
   // Apply initial language (stored in localStorage or default 'es')
   applyI18n();
 
@@ -760,6 +760,10 @@ function init() {
   });
 
   if (!state.campaigns.length) state.createCampaign(t('campaign.default_name'));
+
+  // Rehydrate images from IndexedDB before first render
+  await state.loadImages();
+
   renderAll();
 
   state.onChange(() => {

@@ -53,6 +53,21 @@ async function deleteImage(id) {
   });
 }
 
+/* ---- Toast helper ---- */
+function _showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = [
+    'position:fixed', 'bottom:1.5rem', 'left:50%', 'transform:translateX(-50%)',
+    'background:' + (type === 'error' ? 'var(--danger,#ef4444)' : 'var(--accent,#6366f1)'),
+    'color:#fff', 'padding:0.6rem 1.2rem', 'border-radius:0.5rem',
+    'font-size:0.9rem', 'z-index:9999', 'box-shadow:0 4px 12px rgba(0,0,0,.4)',
+    'pointer-events:none', 'opacity:1', 'transition:opacity 0.4s'
+  ].join(';');
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 4000);
+}
+
 /* ---- Campaign data structure ---- */
 function createCampaignData(name) {
   const locId = uid();
@@ -99,6 +114,15 @@ class StateManager {
       this._campaigns = raw ? JSON.parse(raw) : [];
       this._activeId = localStorage.getItem(ACTIVE_KEY) || null;
 
+      // Strip any legacy imgDataUrl that may still be in localStorage
+      // (from before this fix). Images now live exclusively in IndexedDB.
+      this._campaigns.forEach(camp => {
+        (camp.tokens    || []).forEach(t => { delete t.imgDataUrl; });
+        (camp.vault     || []).forEach(p => { delete p.imgDataUrl; });
+        (camp.locations || []).forEach(loc =>
+          (loc.tokens || []).forEach(t => { delete t.imgDataUrl; })
+        );
+      });
       // Migrate existing campaigns to locations structure
       this._campaigns.forEach(c => {
         if (!c.locations) {
@@ -143,13 +167,29 @@ class StateManager {
       if (c) {
         this._saveCurrentLocationState(c);
       }
-      localStorage.setItem(STATE_KEY, JSON.stringify(this._campaigns));
+
+      // Strip imgDataUrl before serializing — images live in IndexedDB only.
+      // We do a deep-clone so we don't mutate live objects.
+      const stripped = this._campaigns.map(camp => ({
+        ...camp,
+        tokens: (camp.tokens || []).map(t => { const { imgDataUrl, ...rest } = t; return rest; }),
+        vault:  (camp.vault  || []).map(p => { const { imgDataUrl, ...rest } = p; return rest; }),
+        locations: (camp.locations || []).map(loc => ({
+          ...loc,
+          tokens: (loc.tokens || []).map(t => { const { imgDataUrl, ...rest } = t; return rest; }),
+        })),
+      }));
+
+      localStorage.setItem(STATE_KEY, JSON.stringify(stripped));
       if (this._activeId) {
         localStorage.setItem(ACTIVE_KEY, this._activeId);
       } else {
         localStorage.removeItem(ACTIVE_KEY);
       }
     } catch (e) {
+      if (e.name === 'QuotaExceededError') {
+        _showToast('⚠️ Almacenamiento lleno. Borra algunas imágenes o campañas.', 'error');
+      }
       console.warn('Could not save state:', e.message);
     }
   }
@@ -164,6 +204,32 @@ class StateManager {
       const i = this._listeners.indexOf(fn);
       if (i >= 0) this._listeners.splice(i, 1);
     };
+  }
+
+  /**
+   * After loading from localStorage, rehydrate imgDataUrl from IndexedDB
+   * for every token and vault preset in every campaign.
+   * Call this once at startup (async) before first render.
+   */
+  async loadImages() {
+    const rehydrate = async (item) => {
+      if (item.imageId) {
+        try {
+          const url = await loadImage(item.imageId);
+          if (url) item.imgDataUrl = url;
+        } catch { /* ignore missing images */ }
+      }
+    };
+
+    const tasks = [];
+    for (const camp of this._campaigns) {
+      for (const t of (camp.tokens || [])) tasks.push(rehydrate(t));
+      for (const p of (camp.vault   || [])) tasks.push(rehydrate(p));
+      for (const loc of (camp.locations || [])) {
+        for (const t of (loc.tokens || [])) tasks.push(rehydrate(t));
+      }
+    }
+    await Promise.all(tasks);
   }
 
   /* --- Campaign CRUD --- */
