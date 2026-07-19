@@ -7,6 +7,7 @@ import { state } from './state.js';
 import { uid, clamp } from './utils.js';
 import { renderBoard, clearBoardCache, removeTokenFromCache, toggleAllTokenImages } from './board.js';
 import { initThemeSystem, applyTheme } from './themes.js';
+import { t, getLang, setLanguage, applyI18n, onLangChange } from './i18n.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -24,7 +25,7 @@ function initCampaignManager() {
     });
     if (!state.campaigns.length) {
       const o = document.createElement('option');
-      o.textContent = '— Sin campañas —'; o.disabled = true;
+      o.textContent = t('campaign.no_campaigns'); o.disabled = true;
       select.appendChild(o);
     }
   };
@@ -34,16 +35,18 @@ function initCampaignManager() {
   });
 
   $('#btn-new-campaign')?.addEventListener('click', () => {
-    const n = prompt('Nombre de la nueva campaña:', 'Nueva Campaña');
+    const n = prompt(t('campaign.prompt.new'), t('campaign.default_name'));
     if (n?.trim()) { state.createCampaign(n.trim()); populate(); renderAll(); }
   });
   $('#btn-delete-campaign')?.addEventListener('click', () => {
     const c = state.active; if (!c) return;
-    if (confirm(`¿Eliminar "${c.name}"?`)) { state.deleteCampaign(c.id); populate(); renderAll(); }
+    if (confirm(t('campaign.confirm.delete', { name: c.name }))) {
+      state.deleteCampaign(c.id); populate(); renderAll();
+    }
   });
   $('#btn-rename-campaign')?.addEventListener('click', () => {
     const c = state.active; if (!c) return;
-    const n = prompt('Nuevo nombre:', c.name);
+    const n = prompt(t('campaign.prompt.rename'), c.name);
     if (n?.trim()) { c.name = n.trim(); state.switchCampaign(c.id); populate(); }
   });
 
@@ -59,28 +62,40 @@ function showTokenEditor(existing = null, preloadedFile = null, isVaultPreset = 
   if (isEdit && existing.imgDataUrl) prev = `<img src="${existing.imgDataUrl}" alt="preview">`;
   if (preloadedFile) {
     const reader = new FileReader();
-    reader.onload = () => { const img = ov.querySelector('#m-upload img'); if (img) img.src = reader.result; else { const ua = ov.querySelector('#m-upload'); if (ua) ua.innerHTML = `<img src="${reader.result}" alt="preview">`; } };
+    reader.onload = () => {
+      const img = ov.querySelector('#m-upload img');
+      if (img) img.src = reader.result;
+      else { const ua = ov.querySelector('#m-upload'); if (ua) ua.innerHTML = `<img src="${reader.result}" alt="preview">`; }
+    };
     reader.readAsDataURL(preloadedFile);
   }
 
+  // Determine modal title
+  let modalTitle;
+  if (isVaultPreset) {
+    modalTitle = isEdit ? t('modal.edit_preset') : t('modal.new_preset');
+  } else {
+    modalTitle = isEdit ? t('modal.edit_creature') : t('modal.new_creature');
+  }
+
   ov.innerHTML = `<div class="modal-panel">
-    <h2>${isEdit ? 'Editar' : 'Nueva'} ${isVaultPreset ? 'Plantilla de Almacén' : 'Criatura'}</h2>
-    <div class="modal-field"><label>Nombre</label><input type="text" id="m-name" value="${isEdit ? esc(existing.name) : ''}" placeholder="Goblin, Dragón..."></div>
-    <div class="modal-field"><label>Imagen</label>
-      <div class="image-upload-area" id="m-upload">${prev || 'Click para subir (PNG, JPG)'}</div>
+    <h2>${modalTitle}</h2>
+    <div class="modal-field"><label>${t('modal.label.name')}</label><input type="text" id="m-name" value="${isEdit ? esc(existing.name) : ''}" placeholder="${t('modal.placeholder.name')}"></div>
+    <div class="modal-field"><label>${t('modal.label.image')}</label>
+      <div class="image-upload-area" id="m-upload">${prev || t('modal.upload_hint')}</div>
       <input type="file" id="m-file" accept="image/*" style="display:none">
-      <button class="btn btn-sm btn-accent" id="m-read-sheet" style="width:100%;margin-top:0.4rem;display:none">🔍 Leer estadísticas automáticamente</button>
-      ${isEdit && existing.imgDataUrl ? '<button class="btn btn-sm btn-secondary" id="m-rmimg">Quitar imagen</button>' : ''}
+      <button class="btn btn-sm btn-accent" id="m-read-sheet" style="width:100%;margin-top:0.4rem;display:none">${t('modal.read_sheet')}</button>
+      ${isEdit && existing.imgDataUrl ? `<button class="btn btn-sm btn-secondary" id="m-rmimg">${t('modal.remove_image')}</button>` : ''}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
-      <div class="modal-field"><label>Vida Máx</label><input type="number" id="m-hp" value="${isEdit ? existing.maxHp : 30}" min="1"></div>
-      <div class="modal-field"><label>CA</label><input type="number" id="m-ac" value="${isEdit ? existing.ac : 12}" min="0"></div>
-      <div class="modal-field"><label>Mod. Iniciativa</label><input type="number" id="m-init" value="${isEdit ? (existing.initMod ?? 0) : 0}" min="-5" max="10" title="Modificador de DEX (+X que se suma al d20)"></div>
-      ${isVaultPreset ? '' : `<div class="modal-field"><label>Cantidad</label><input type="number" id="m-ct" value="${isEdit ? existing.count : 1}" min="1"></div>`}
+      <div class="modal-field"><label>${t('modal.label.hp')}</label><input type="number" id="m-hp" value="${isEdit ? existing.maxHp : 30}" min="1"></div>
+      <div class="modal-field"><label>${t('modal.label.ac')}</label><input type="number" id="m-ac" value="${isEdit ? existing.ac : 12}" min="0"></div>
+      <div class="modal-field"><label>${t('modal.label.init')}</label><input type="number" id="m-init" value="${isEdit ? (existing.initMod ?? 0) : 0}" min="-5" max="10"></div>
+      ${isVaultPreset ? '' : `<div class="modal-field"><label>${t('modal.label.count')}</label><input type="number" id="m-ct" value="${isEdit ? existing.count : 1}" min="1"></div>`}
     </div>
     <div class="modal-actions">
-      <button class="btn btn-secondary" id="m-cancel">Cancelar</button>
-      <button class="btn btn-primary" id="m-save">${isEdit ? 'Guardar' : 'Añadir'}</button>
+      <button class="btn btn-secondary" id="m-cancel">${t('modal.cancel')}</button>
+      <button class="btn btn-primary" id="m-save">${isEdit ? t('modal.save') : t('modal.add')}</button>
     </div>
   </div>`;
   document.body.appendChild(ov);
@@ -98,11 +113,9 @@ function showTokenEditor(existing = null, preloadedFile = null, isVaultPreset = 
     sf = fi.files[0];
     if (sf) {
       const r = new FileReader();
-      r.onload = () => {
-        ov.querySelector('#m-upload').innerHTML = `<img src="${r.result}" alt="preview">`;
-        if (readBtn) readBtn.style.display = 'block';
-      };
+      r.onload = () => { ov.querySelector('#m-upload').innerHTML = `<img src="${r.result}" alt="preview">`; };
       r.readAsDataURL(sf);
+      if (readBtn) readBtn.style.display = 'block';
     }
   });
 
@@ -110,7 +123,7 @@ function showTokenEditor(existing = null, preloadedFile = null, isVaultPreset = 
   readBtn?.addEventListener('click', async () => {
     if (!sf) return;
     readBtn.disabled = true;
-    readBtn.textContent = '⏳ Leyendo ficha…';
+    readBtn.textContent = t('modal.reading');
 
     try {
       const b64 = await new Promise((res, rej) => {
@@ -120,7 +133,7 @@ function showTokenEditor(existing = null, preloadedFile = null, isVaultPreset = 
         r.readAsDataURL(sf);
       });
 
-      const prompt = `Look at this tabletop RPG monster stat block image carefully.
+      const prompt_text = `Look at this tabletop RPG monster stat block image carefully.
 
 TASK 1 - Find these lines and extract the numbers:
 - NAME: The large bold title at the very top of the card.
@@ -143,7 +156,7 @@ Respond with ONLY this JSON, no explanation:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'gemma4',
-          prompt,
+          prompt: prompt_text,
           images: [b64],
           stream: false
           // NO format:'json' — it interferes with vision reasoning
@@ -179,7 +192,7 @@ Respond with ONLY this JSON, no explanation:
         }
       }
 
-      if (!stats) throw new Error('No se pudo interpretar la respuesta');
+      if (!stats) throw new Error('Could not parse response');
 
       // DEX is always index 1 in [STR, DEX, CON, INT, WIS, CHA]
       if (Array.isArray(stats.modifiers) && stats.modifiers.length >= 2) {
@@ -205,28 +218,31 @@ Respond with ONLY this JSON, no explanation:
 
       readBtn.textContent = `✅ ${detected}`;
       readBtn.style.background = 'var(--success, #22c55e)';
-      setTimeout(() => { readBtn.textContent = '🔍 Leer estadísticas automáticamente'; readBtn.style.background = ''; readBtn.disabled = false; }, 4000);
-
+      setTimeout(() => {
+        readBtn.textContent = t('modal.read_sheet');
+        readBtn.style.background = '';
+        readBtn.disabled = false;
+      }, 4000);
     } catch (err) {
       console.error('OCR error:', err);
       readBtn.disabled = false;
-      readBtn.textContent = '❌ Error al leer — ¿Ollama en marcha?';
-      setTimeout(() => { readBtn.textContent = '🔍 Leer estadísticas automáticamente'; }, 3000);
+      readBtn.textContent = t('modal.read_error');
+      setTimeout(() => { readBtn.textContent = t('modal.read_sheet'); }, 3000);
     }
   });
-
 
   ov.querySelector('#m-cancel')?.addEventListener('click', () => ov.remove());
   ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
   ov.querySelector('#m-rmimg')?.addEventListener('click', () => {
-    sf = null; ov.querySelector('#m-upload').innerHTML = 'Click para subir (PNG, JPG)';
+    sf = null;
+    ov.querySelector('#m-upload').innerHTML = t('modal.upload_hint');
     if (readBtn) readBtn.style.display = 'none';
     if (isEdit) { existing.imgDataUrl = null; existing.imageId = null; }
   });
 
   ov.querySelector('#m-save')?.addEventListener('click', async () => {
     const name = ov.querySelector('#m-name').value.trim();
-    if (!name) { alert('La criatura necesita nombre.'); return; }
+    if (!name) { alert(t('modal.error.no_name')); return; }
     const hp = parseInt(ov.querySelector('#m-hp').value) || 30;
     const ac = parseInt(ov.querySelector('#m-ac').value) || 12;
     const initMod = parseInt(ov.querySelector('#m-init').value) || 0;
@@ -254,13 +270,10 @@ function renderPlayers() {
   const c = state.active; const panel = $('#players-panel');
   if (!c) return;
 
-  const existing = new Map();
-  panel.querySelectorAll('.player-row').forEach(r => existing.set(r.dataset.id, r));
-
   let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem">
-    <h3 style="margin:0">👥 Jugadores</h3><button class="btn btn-sm btn-primary" id="btn-add-p">＋</button></div><div id="player-list">`;
+    <h3 style="margin:0">${t('players.title')}</h3><button class="btn btn-sm btn-primary" id="btn-add-p">＋</button></div><div id="player-list">`;
 
-  if (!c.players.length) html += '<div style="color:var(--text-secondary);font-size:0.85rem;padding:0.5rem">Sin jugadores.</div>';
+  if (!c.players.length) html += `<div style="color:var(--text-secondary);font-size:0.85rem;padding:0.5rem">${t('players.empty')}</div>`;
 
   c.players.forEach(p => {
     html += `<div class="player-row" data-id="${p.id}">
@@ -272,17 +285,21 @@ function renderPlayers() {
         <span class="token-hp-max">/ ${p.maxHp}</span>
         <button class="btn btn-sm btn-success hp-up" data-pid="${p.id}">＋</button>
       </div>
-      <span style="font-size:0.8rem;color:var(--text-secondary)">CA ${p.ac}</span>
-      <button class="btn btn-sm btn-danger" data-del="${p.id}" title="Eliminar">×</button>
+      <span style="font-size:0.8rem;color:var(--text-secondary)">${t('token.ac_label')} ${p.ac}</span>
+      <button class="btn btn-sm btn-danger" data-del="${p.id}" title="${t('header.delete_campaign')}">×</button>
     </div>`;
   });
-  html += '</div><button class="btn btn-sm btn-secondary" id="btn-add-p2" style="margin-top:0.4rem;width:100%">＋ Añadir Jugador</button>';
+  html += `</div><button class="btn btn-sm btn-secondary" id="btn-add-p2" style="margin-top:0.4rem;width:100%">${t('players.add')}</button>`;
   panel.innerHTML = html;
 
   const addP = () => {
-    const n = prompt('Nombre del jugador:', 'Jugador');
+    const n = prompt(t('players.prompt.name'), t('players.default_name'));
     if (!n?.trim()) return;
-    state.addPlayer({ name: n.trim(), maxHp: parseInt(prompt('Vida máxima:', '30')) || 30, ac: parseInt(prompt('CA:', '14')) || 14 });
+    state.addPlayer({
+      name: n.trim(),
+      maxHp: parseInt(prompt(t('players.prompt.hp'), '30')) || 30,
+      ac: parseInt(prompt(t('players.prompt.ac'), '14')) || 14
+    });
     renderPlayers();
   };
   panel.querySelector('#btn-add-p')?.addEventListener('click', addP);
@@ -302,7 +319,9 @@ function renderPlayers() {
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') { inp.dataset.delta = inp.value; inp.blur(); } });
   });
   panel.querySelectorAll('[data-del]').forEach(b => {
-    b.addEventListener('click', () => { if (confirm('¿Eliminar jugador?')) { state.removePlayer(b.dataset.del); renderAll(); } });
+    b.addEventListener('click', () => {
+      if (confirm(t('players.confirm.delete'))) { state.removePlayer(b.dataset.del); renderAll(); }
+    });
   });
 }
 
@@ -320,50 +339,45 @@ function renderInitiative() {
   const c = state.active; const panel = $('#initiative-panel');
   if (!c) return;
 
-  let html = `<div class="initiative-header"><h3 style="margin:0">⚔️ Iniciativa</h3>
-    ${c.round > 0 ? `<span class="round-counter">Ronda ${c.round}</span>` : ''}</div>`;
+  let html = `<div class="initiative-header"><h3 style="margin:0">${t('initiative.title')}</h3>
+    ${c.round > 0 ? `<span class="round-counter">${t('initiative.round')} ${c.round}</span>` : ''}</div>`;
 
   if (!c.initiative.length) {
-    html += '<div style="color:var(--text-secondary);font-size:0.85rem;padding:0.5rem;text-align:center">Genera la iniciativa para empezar.</div>';
+    html += `<div style="color:var(--text-secondary);font-size:0.85rem;padding:0.5rem;text-align:center">${t('initiative.empty')}</div>`;
   } else {
     html += '<ul class="initiative-list">';
     c.initiative.forEach((e, i) => {
       const active = i === c.activeTurnIndex ? ' active-turn' : '';
-      
-      // Determine HP status class
       let hpStatus = 'hp-healthy';
       const hpPct = e.maxHp > 0 ? (e.hp / e.maxHp) : 0;
-      if (hpPct <= 0.25) {
-        hpStatus = 'hp-critical';
-      } else if (hpPct <= 0.5) {
-        hpStatus = 'hp-injured';
-      }
-      
+      if (hpPct <= 0.25) hpStatus = 'hp-critical';
+      else if (hpPct <= 0.5) hpStatus = 'hp-injured';
       const widthPct = Math.max(0, Math.min(100, hpPct * 100));
+      const badge = e.type === 'player' ? t('initiative.badge.player') : t('initiative.badge.npc');
 
       html += `<li class="initiative-entry${active}" data-eid="${e.id}">
         <div class="init-row-main">
           <div class="init-left">
-            <span class="initiative-roll" title="Haz clic para modificar tirada">${e.roll}</span>
+            <span class="initiative-roll">${e.roll}</span>
             <span class="initiative-name" title="${esc(e.name)}">${esc(e.name)}</span>
-            <span class="init-badge ${e.type}">${e.type === 'player' ? 'PJ' : 'PNJ'}</span>
+            <span class="init-badge ${e.type}">${badge}</span>
           </div>
           <div class="init-right">
-            <span class="initiative-ac" title="Clase de Armadura">🛡️ ${e.ac}</span>
+            <span class="initiative-ac">🛡️ ${e.ac}</span>
           </div>
         </div>
         <div class="init-row-hp">
           <div class="init-hp-progress-container">
-            <div class="init-hp-text">HP: <strong>${e.hp}</strong> / ${e.maxHp}</div>
+            <div class="init-hp-text">${t('initiative.hp_label')} <strong>${e.hp}</strong> / ${e.maxHp}</div>
             <div class="init-hp-bar-bg">
               <div class="init-hp-bar-fill ${hpStatus}" style="width: ${widthPct}%"></div>
             </div>
           </div>
           <div class="initiative-hp">
-            <button class="btn btn-sm hp-down" data-eid="${e.id}" title="Restar HP">−</button>
+            <button class="btn btn-sm hp-down" data-eid="${e.id}">−</button>
             <input type="number" class="token-hp-input stat-number ${e.hp <= e.maxHp * 0.25 ? 'hp-low' : ''}"
-                   value="${e.hp}" data-eid="${e.id}" data-act="ihp" data-delta="1" min="0" max="${e.maxHp}" title="Presiona Enter para establecer delta de ajuste">
-            <button class="btn btn-sm hp-up" data-eid="${e.id}" title="Sumar HP">＋</button>
+                   value="${e.hp}" data-eid="${e.id}" data-act="ihp" data-delta="1" min="0" max="${e.maxHp}">
+            <button class="btn btn-sm hp-up" data-eid="${e.id}">＋</button>
           </div>
         </div>
       </li>`;
@@ -372,11 +386,11 @@ function renderInitiative() {
   }
 
   html += `<div class="initiative-controls" style="margin-top:0.5rem">
-    <button class="btn btn-primary" id="btn-gen">🎲 Generar Iniciativa</button>
+    <button class="btn btn-primary" id="btn-gen">${t('initiative.generate')}</button>
     ${c.initiative.length ? `<div style="display:flex;gap:0.3rem;margin-top:0.3rem">
       <button class="btn btn-secondary" id="btn-prev">◀</button>
-      <button class="btn btn-primary" id="btn-next" style="flex:1">▶ Siguiente</button>
-      <button class="btn btn-sm btn-secondary" id="btn-clr">✕</button>
+      <button class="btn btn-primary" id="btn-next" style="flex:1">▶</button>
+      <button class="btn btn-sm btn-secondary" id="btn-clr">${t('initiative.clear')}</button>
     </div>` : ''}
   </div>`;
   panel.innerHTML = html;
@@ -386,7 +400,7 @@ function renderInitiative() {
     // Prompt for player rolls
     c.initiative.forEach(e => {
       if (e.type === 'player') {
-        const r = prompt(`Iniciativa de ${e.name}:`, '10');
+        const r = prompt(`${t('initiative.prompt.set')} ${e.name}:`, '10');
         if (r && !isNaN(parseInt(r))) e.roll = parseInt(r);
         else e.roll = 10;
       }
@@ -397,7 +411,9 @@ function renderInitiative() {
   });
   panel.querySelector('#btn-next')?.addEventListener('click', () => { state.nextTurn(); renderAll(); });
   panel.querySelector('#btn-prev')?.addEventListener('click', () => { state.prevTurn(); renderAll(); });
-  panel.querySelector('#btn-clr')?.addEventListener('click', () => { if (confirm('¿Limpiar iniciativa?')) { state.clearInitiative(); renderAll(); } });
+  panel.querySelector('#btn-clr')?.addEventListener('click', () => {
+    if (confirm(t('initiative.confirm.clear'))) { state.clearInitiative(); renderAll(); }
+  });
 
   // Roll modification on click
   panel.querySelectorAll('.initiative-roll').forEach(rollSpan => {
@@ -405,7 +421,7 @@ function renderInitiative() {
       const eid = rollSpan.closest('.initiative-entry').dataset.eid;
       const entry = c.initiative.find(en => en.id === eid);
       if (!entry) return;
-      const newVal = prompt(`Modificar iniciativa de ${entry.name}:`, entry.roll);
+      const newVal = prompt(`${t('initiative.prompt.edit')} ${entry.name}:`, entry.roll);
       if (newVal !== null && !isNaN(parseInt(newVal))) {
         state.updateInitiativeEntry(eid, { roll: parseInt(newVal) });
         state.sortInitiative();
@@ -422,7 +438,6 @@ function renderInitiative() {
   panel.querySelectorAll('.hp-down').forEach(b => {
     b.addEventListener('click', () => initDelta(b.dataset.eid, -1));
   });
-  // HP inputs
   panel.querySelectorAll('[data-act="ihp"]').forEach(inp => {
     inp.addEventListener('input', () => {
       const v = parseInt(inp.value); const eid = inp.dataset.eid;
@@ -455,11 +470,11 @@ function renderAll() {
       removeTokenFromCache(id);
       renderAll();
     },
-    onEdit: (t) => showTokenEditor(t),
-    onSaveVault: (t) => {
-      state.addTokenToVault(t);
+    onEdit: (token) => showTokenEditor(token),
+    onSaveVault: (token) => {
+      state.addTokenToVault(token);
       renderAll();
-      alert(`"${t.name}" guardado en el Almacén.`);
+      alert(t('vault.saved_alert', { name: token.name }));
     }
   });
 
@@ -484,15 +499,15 @@ function renderLocations() {
       <div class="location-item${activeClass}" data-loc-id="${loc.id}">
         <span class="location-name">${esc(loc.name)}</span>
         <div class="location-actions">
-          <button class="btn-icon-sm" data-act="rename-loc" data-loc-id="${loc.id}" title="Renombrar">✎</button>
-          ${c.locations.length > 1 ? `<button class="btn-icon-sm btn-danger" data-act="delete-loc" data-loc-id="${loc.id}" title="Eliminar">✕</button>` : ''}
+          <button class="btn-icon-sm" data-act="rename-loc" data-loc-id="${loc.id}" title="${t('locations.rename_title')}">✎</button>
+          ${c.locations.length > 1 ? `<button class="btn-icon-sm btn-danger" data-act="delete-loc" data-loc-id="${loc.id}" title="${t('locations.delete_title')}">✕</button>` : ''}
         </div>
       </div>
     `;
   });
   
   html += `</div>
-    <button class="btn btn-secondary btn-sm" id="btn-add-location" style="width:100%">＋ Nueva Localización</button>`;
+    <button class="btn btn-secondary btn-sm" id="btn-add-location" style="width:100%">${t('locations.add')}</button>`;
     
   panel.innerHTML = html;
 
@@ -512,7 +527,7 @@ function renderLocations() {
       const locId = b.dataset.locId;
       const loc = c.locations.find(l => l.id === locId);
       if (!loc) return;
-      const n = prompt('Nuevo nombre de la localización:', loc.name);
+      const n = prompt(t('locations.prompt.rename'), loc.name);
       if (n?.trim()) {
         state.renameLocation(locId, n.trim());
         renderAll();
@@ -526,7 +541,7 @@ function renderLocations() {
       const locId = b.dataset.locId;
       const loc = c.locations.find(l => l.id === locId);
       if (!loc) return;
-      if (confirm(`¿Eliminar la localización "${loc.name}" y todas sus criaturas?`)) {
+      if (confirm(t('locations.confirm.delete', { name: loc.name }))) {
         clearBoardCache();
         state.deleteLocation(locId);
         renderAll();
@@ -535,7 +550,7 @@ function renderLocations() {
   });
 
   panel.querySelector('#btn-add-location')?.addEventListener('click', () => {
-    const n = prompt('Nombre de la nueva localización:', 'Nueva Localización');
+    const n = prompt(t('locations.prompt.new'), t('locations.default_name'));
     if (n?.trim()) {
       clearBoardCache();
       state.createLocation(n.trim());
@@ -554,7 +569,7 @@ function renderVault() {
   let html = `<div class="vault-list">`;
   
   if (!c.vault.length) {
-    html += '<div style="color:var(--text-secondary);font-size:0.85rem;padding:0.5rem;text-align:center">El almacén está vacío. Guarda criaturas desde el tablero o crea plantillas.</div>';
+    html += `<div style="color:var(--text-secondary);font-size:0.85rem;padding:0.5rem;text-align:center">${t('vault.empty')}</div>`;
   } else {
     c.vault.forEach(preset => {
       const hasImage = !!preset.imgDataUrl;
@@ -574,8 +589,8 @@ function renderVault() {
             </div>
           </div>
           <div class="vault-actions">
-            <button class="btn btn-sm btn-primary" data-act="spawn-preset" data-preset-id="${preset.id}" title="Añadir al Tablero">＋</button>
-            <button class="btn btn-sm btn-danger" data-act="delete-preset" data-preset-id="${preset.id}" title="Eliminar">×</button>
+            <button class="btn btn-sm btn-primary" data-act="spawn-preset" data-preset-id="${preset.id}" title="${t('vault.spawn_title')}">＋</button>
+            <button class="btn btn-sm btn-danger" data-act="delete-preset" data-preset-id="${preset.id}" title="${t('vault.delete_title')}">×</button>
           </div>
         </div>
       `;
@@ -583,7 +598,7 @@ function renderVault() {
   }
   
   html += `</div>
-    <button class="btn btn-secondary btn-sm" id="btn-add-vault-preset" style="width:100%;margin-top:0.5rem">＋ Crear Nueva Plantilla</button>`;
+    <button class="btn btn-secondary btn-sm" id="btn-add-vault-preset" style="width:100%;margin-top:0.5rem">${t('vault.add_preset')}</button>`;
     
   panel.innerHTML = html;
 
@@ -600,7 +615,7 @@ function renderVault() {
       const presetId = b.dataset.presetId;
       const preset = c.vault.find(p => p.id === presetId);
       if (!preset) return;
-      if (confirm(`¿Eliminar la plantilla de "${preset.name}" del almacén?`)) {
+      if (confirm(t('vault.confirm.delete', { name: preset.name }))) {
         state.removePresetFromVault(presetId);
         renderAll();
       }
@@ -633,8 +648,8 @@ function syncInitFromBoard() {
   if (!c?.initiative.length) return;
   c.initiative.forEach(e => {
     if (e.type === 'token') {
-      const t = c.tokens.find(tk => tk.id === e.refId);
-      if (t) { e.hp = t.hp; e.maxHp = t.maxHp; e.ac = t.ac; e.saveDc = t.saveDc; }
+      const tok = c.tokens.find(tk => tk.id === e.refId);
+      if (tok) { e.hp = tok.hp; e.maxHp = tok.maxHp; e.ac = tok.ac; }
     } else {
       const p = c.players.find(pl => pl.id === e.refId);
       if (p) { e.hp = p.hp; e.maxHp = p.maxHp; e.ac = p.ac; }
@@ -674,7 +689,7 @@ function initDropZone() {
     if (!files?.length) return;
     const file = files[0];
     if (!file.type.startsWith('image/')) {
-      alert('Solo se aceptan archivos de imagen (PNG, JPG, etc.)');
+      alert(t('modal.only_images'));
       return;
     }
 
@@ -683,11 +698,40 @@ function initDropZone() {
   });
 }
 
+/* ---- Language toggle ---- */
+function initLangToggle() {
+  const btn = $('#btn-lang');
+  if (!btn) return;
+
+  btn.addEventListener('click', () => {
+    const newLang = getLang() === 'es' ? 'en' : 'es';
+    setLanguage(newLang);
+    // Rebuild board tokens so HP/AC labels update
+    clearBoardCache();
+    renderAll();
+  });
+
+  // When language changes (from any source), sync static data-i18n elements
+  // and the expand button text
+  onLangChange(() => {
+    applyI18n();
+    const expandBtn = $('#btn-toggle-size');
+    if (expandBtn) {
+      const isExpanded = expandBtn.dataset.expanded === 'true';
+      expandBtn.textContent = isExpanded ? t('toolbar.compact') : t('toolbar.expand');
+    }
+  });
+}
+
 /* ---- Init ---- */
 function init() {
+  // Apply initial language (stored in localStorage or default 'es')
+  applyI18n();
+
   initCampaignManager();
   initThemeSystem();
   initSidebarTabs();
+  initLangToggle();
 
   $('#btn-add-token')?.addEventListener('click', () => showTokenEditor());
 
@@ -698,7 +742,10 @@ function init() {
   $('#btn-toggle-size')?.addEventListener('click', () => {
     const exp = toggleAllTokenImages();
     const btn = $('#btn-toggle-size');
-    if (btn) btn.textContent = exp ? '⊡ Compactar' : '⤢ Expandir';
+    if (btn) {
+      btn.textContent = exp ? t('toolbar.compact') : t('toolbar.expand');
+      btn.dataset.expanded = exp ? 'true' : 'false';
+    }
   });
 
   // Theme toggle
@@ -707,7 +754,7 @@ function init() {
     if (tp) tp.style.display = tp.style.display === 'none' ? 'block' : 'none';
   });
 
-  if (!state.campaigns.length) state.createCampaign('Mi Campaña');
+  if (!state.campaigns.length) state.createCampaign(t('campaign.default_name'));
   renderAll();
 
   state.onChange(() => {

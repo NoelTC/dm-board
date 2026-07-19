@@ -4,6 +4,8 @@
    HP delta input. Global compact/expand toggle.
    ============================================================ */
 
+import { t } from './i18n.js';
+
 const TOKEN_MAP = new Map(); // tokenId -> DOM element
 
 /**
@@ -20,7 +22,7 @@ export function renderBoard(boardEl, tokens, { onUpdate, onRemove, onEdit, onSav
     if (!emptyEl) {
       emptyEl = document.createElement('div');
       emptyEl.className = 'board-empty';
-      emptyEl.innerHTML = `<div style="font-size:2.5rem">🎯</div><div>Añade criaturas con <strong>"＋ Criatura"</strong></div>`;
+      emptyEl.innerHTML = `<div style="font-size:2.5rem">🎯</div><div data-i18n-html="board.empty.hint">${t('board.empty.hint')}</div>`;
       boardEl.appendChild(emptyEl);
     }
   } else {
@@ -70,7 +72,7 @@ function buildTokenElement(board, token, { onUpdate, onRemove, onEdit, onSaveVau
   const hasImage = !!token.imgDataUrl;
 
   el.innerHTML = `
-    <button class="token-delete-btn" data-act="remove" title="Eliminar">×</button>
+    <button class="token-delete-btn" data-act="remove" title="${t('header.delete_campaign')}">×</button>
     ${token.count > 1 ? `<span class="token-count-badge">×${token.count}</span>` : ''}
     <div class="token-image-wrap" data-act="toggle-img">
       ${hasImage
@@ -83,11 +85,11 @@ function buildTokenElement(board, token, { onUpdate, onRemove, onEdit, onSaveVau
     <div class="token-panel">
       <div class="token-name-tag">
         ${esc(token.name)}
-        <button class="btn btn-sm" data-act="edit" title="Editar" style="font-size:0.65rem;padding:0 0.25rem;margin-left:0.2rem">✎</button>
-        <button class="btn btn-sm" data-act="save-vault" title="Guardar en Almacén" style="font-size:0.65rem;padding:0 0.25rem;margin-left:0.2rem">📁</button>
+        <button class="btn btn-sm" data-act="edit" title="${t('token.edit_title')}" style="font-size:0.65rem;padding:0 0.25rem;margin-left:0.2rem">✎</button>
+        <button class="btn btn-sm" data-act="save-vault" title="${t('token.save_vault_title')}" style="font-size:0.65rem;padding:0 0.25rem;margin-left:0.2rem">📁</button>
       </div>
       <div class="token-panel-row">
-        <span class="token-panel-label">HP</span>
+        <span class="token-panel-label">${t('token.hp_label')}</span>
         <div class="hp-controls">
           <button class="btn btn-sm btn-danger" data-act="hp-down">−</button>
           <input type="number" class="token-hp-input stat-number" value="${token.hp}"
@@ -97,7 +99,7 @@ function buildTokenElement(board, token, { onUpdate, onRemove, onEdit, onSaveVau
         </div>
       </div>
       <div class="token-panel-row">
-        <span class="token-panel-label">CA</span>
+        <span class="token-panel-label">${t('token.ac_label')}</span>
         <span class="token-panel-value">${token.ac}</span>
       </div>
     </div>

@@ -26,14 +26,22 @@
     <h1 style="font-size:1.2rem;margin:0;white-space:nowrap">🎯 DM Board</h1>
 
     <div class="campaign-selector">
-      <select id="campaign-select" aria-label="Seleccionar campaña"></select>
-      <button class="btn btn-sm btn-secondary" id="btn-new-campaign" title="Nueva campaña">+</button>
-      <button class="btn btn-sm btn-secondary" id="btn-rename-campaign" title="Renombrar">✎</button>
-      <button class="btn btn-sm btn-danger" id="btn-delete-campaign" title="Eliminar campaña">🗑</button>
+      <select id="campaign-select" data-i18n-aria="header.new_campaign"></select>
+      <button class="btn btn-sm btn-secondary" id="btn-new-campaign"
+              data-i18n-title="header.new_campaign">+</button>
+      <button class="btn btn-sm btn-secondary" id="btn-rename-campaign"
+              data-i18n-title="header.rename_campaign">✎</button>
+      <button class="btn btn-sm btn-danger" id="btn-delete-campaign"
+              data-i18n-title="header.delete_campaign">🗑</button>
     </div>
 
     <div style="display:flex;gap:0.4rem;align-items:center">
-      <button class="btn btn-sm btn-secondary" id="btn-toggle-theme" title="Cambiar tema">🎨</button>
+      <button class="btn btn-sm btn-secondary" id="btn-toggle-theme"
+              data-i18n-title="header.change_theme">🎨</button>
+      <!-- Language toggle -->
+      <button class="btn btn-sm btn-secondary" id="btn-lang"
+              data-i18n="header.lang_toggle"
+              style="font-weight:700;min-width:2.2rem">EN</button>
     </div>
   </header>
 
@@ -43,7 +51,7 @@
     <div class="board-area" id="board-area">
       <div class="board-empty">
         <div style="font-size:2.5rem">🎯</div>
-        <div>Añade criaturas con el botón <strong>"+ Criatura"</strong></div>
+        <div data-i18n-html="board.empty.hint">Añade criaturas con el botón <strong>"+ Criatura"</strong></div>
       </div>
     </div>
 
@@ -51,22 +59,26 @@
     <aside class="sidebar" id="sidebar">
       <!-- Toolbar -->
       <div class="board-toolbar">
-        <button class="btn btn-primary" id="btn-add-token">＋ Criatura</button>
-        <button class="btn btn-sm btn-secondary" id="btn-toggle-size" title="Expandir/Compactar todas las imágenes">⤢ Expandir</button>
-        <span style="font-size:0.7rem;color:var(--text-secondary);align-self:center;margin-left:auto">
-          ✎ editar • ⤢ click en imagen
-        </span>
+        <button class="btn btn-primary" id="btn-add-token"
+                data-i18n="toolbar.add_token">＋ Criatura</button>
+        <button class="btn btn-sm btn-secondary" id="btn-toggle-size"
+                data-i18n-title="toolbar.expand"
+                data-i18n="toolbar.expand">⤢ Expandir</button>
+        <span style="font-size:0.7rem;color:var(--text-secondary);align-self:center;margin-left:auto"
+              data-i18n="toolbar.hint">✎ editar • ⤢ click en imagen</span>
       </div>
 
       <!-- Sidebar Tabs -->
       <div class="sidebar-tabs">
-        <button class="tab-btn active" data-tab="tab-combat">⚔️ Combate</button>
-        <button class="tab-btn" data-tab="tab-prep">🗺️ Prep & Almacén</button>
+        <button class="tab-btn active" data-tab="tab-combat"
+                data-i18n="tab.combat">⚔️ Combate</button>
+        <button class="tab-btn" data-tab="tab-prep"
+                data-i18n="tab.prep">🗺️ Prep &amp; Almacén</button>
       </div>
 
       <!-- Theme Picker (hidden by default) -->
       <div class="panel-card" id="theme-panel" style="display:none">
-        <h3>🎨 Tema de Campaña</h3>
+        <h3 data-i18n="theme.title">🎨 Tema de Campaña</h3>
         <div id="theme-picker"></div>
       </div>
 
@@ -74,14 +86,14 @@
       <div class="tab-content" id="tab-combat">
         <!-- Players -->
         <div class="panel-card" id="players-panel">
-          <h3>👥 Jugadores</h3>
-          <div style="color:var(--text-secondary);font-size:0.85rem">Cargando...</div>
+          <h3 data-i18n="players.title">👥 Jugadores</h3>
+          <div style="color:var(--text-secondary);font-size:0.85rem" data-i18n="players.empty">Cargando...</div>
         </div>
 
         <!-- Initiative -->
         <div class="panel-card" id="initiative-panel">
-          <h3>⚔️ Iniciativa</h3>
-          <div style="color:var(--text-secondary);font-size:0.85rem">Cargando...</div>
+          <h3 data-i18n="initiative.title">⚔️ Iniciativa</h3>
+          <div style="color:var(--text-secondary);font-size:0.85rem" data-i18n="initiative.empty">Cargando...</div>
         </div>
       </div>
 
@@ -89,14 +101,14 @@
       <div class="tab-content" id="tab-prep" style="display:none">
         <!-- Locations -->
         <div class="panel-card" id="locations-panel">
-          <h3>🗺️ Localizaciones</h3>
-          <div style="color:var(--text-secondary);font-size:0.85rem">Cargando...</div>
+          <h3 data-i18n="locations.title">🗺️ Localizaciones</h3>
+          <div style="color:var(--text-secondary);font-size:0.85rem" data-i18n="players.empty">Cargando...</div>
         </div>
 
         <!-- Vault -->
         <div class="panel-card" id="vault-panel">
-          <h3>📁 Almacén de Criaturas</h3>
-          <div style="color:var(--text-secondary);font-size:0.85rem">Cargando...</div>
+          <h3 data-i18n="vault.title">📁 Almacén de Criaturas</h3>
+          <div style="color:var(--text-secondary);font-size:0.85rem" data-i18n="players.empty">Cargando...</div>
         </div>
       </div>
     </aside>
