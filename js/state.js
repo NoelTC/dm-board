@@ -669,6 +669,32 @@ class StateManager {
     return preset;
   }
 
+  /**
+   * Batch vault import: takes already-compressed image data
+   * (to avoid re-compressing in a tight loop).
+   */
+  async addPresetToVaultBatch({ name, maxHp, ac, initMod, imageId, imgDataUrl }) {
+    const c = this.active;
+    if (!c) return null;
+
+    const preset = {
+      id: uid(),
+      name: name || 'Nueva Plantilla',
+      imageId: imageId || null,
+      imgDataUrl: imgDataUrl || null,
+      maxHp: maxHp || 10,
+      ac: ac || 10,
+      initMod: typeof initMod === 'number' ? initMod : 0
+    };
+
+    c.vault = c.vault || [];
+    c.vault.push(preset);
+    c.updatedAt = Date.now();
+    this._save();
+    this._notify();
+    return preset;
+  }
+
   removePresetFromVault(presetId) {
     const c = this.active;
     if (!c) return;

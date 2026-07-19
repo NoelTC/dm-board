@@ -772,3 +772,37 @@
   padding: 0.2rem 0.4rem;
   font-size: 0.75rem;
 }
+
+/* ---- Vault batch import drop zone ---- */
+.vault-drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 0.5rem;
+  padding: 0.6rem;
+  text-align: center;
+  margin-bottom: 0.5rem;
+  transition: border-color 0.2s, background 0.2s;
+  cursor: pointer;
+}
+.vault-drop-zone.drag-over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.vault-drop-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.vault-batch-progress {
+  background: var(--bg-secondary);
+  border-radius: 0.4rem;
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  max-height: 10rem;
+  overflow-y: auto;
+  line-height: 1.6;
+}

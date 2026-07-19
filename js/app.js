@@ -11,6 +11,89 @@ import { t, getLang, setLanguage, applyI18n } from './i18n.js';
 
 const $ = (s) => document.querySelector(s);
 
+/* ---- Ollama OCR (reusable) ---- */
+
+/**
+ * Call Ollama vision model to read a stat block image.
+ * @param {File} file - Image file
+ * @returns {Promise<{name:string, hp:number, ac:number, modifiers:number[], initMod:number}|null>}
+ */
+async function ocrStatBlock(file) {
+  const b64 = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+
+  const prompt_text = `Look at this tabletop RPG monster stat block image carefully.
+
+TASK 1 - Find these lines and extract the numbers:
+- NAME: The large bold title at the very top of the card.
+- HP: The line that says "Hit Points" or "Puntos de Golpe". Take only the FIRST integer before any parenthesis. Example: "Hit Points 55 (10d8 + 10)" → 55
+- AC: The line that says "Armor Class" or "Clase de Armadura". Take only the first integer. Example: "Armor Class 12 (Sin armadura)" → 12
+
+TASK 2 - Find the ability scores table:
+The table always has exactly 6 columns in this order: STR | DEX | CON | INT | WIS | CHA
+Under each column header there is a score and a modifier in parentheses.
+Example row: "11 (+0)  14 (+2)  12 (+1)  20 (+5)  16 (+3)  20 (+5)"
+List all 6 modifiers in order as integers (drop the + sign, keep the - sign):
+modifiers: [0, 2, 1, 5, 3, 5]
+The DEX modifier is always the SECOND value in that list.
+
+Respond with ONLY this JSON, no explanation:
+{"name":"...","hp":0,"ac":0,"modifiers":[str,dex,con,int,wis,cha]}`;
+
+  const resp = await fetch('http://localhost:11434/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gemma4',
+      prompt: prompt_text,
+      images: [b64],
+      stream: false
+    })
+  });
+
+  if (!resp.ok) throw new Error(`Ollama error ${resp.status}`);
+  const data = await resp.json();
+  const raw = data.response || '';
+
+  // Robust parser: try JSON first, then regex fallback
+  let stats = null;
+  try {
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const match = clean.match(/\{[\s\S]*?\}/);
+    if (match) stats = JSON.parse(match[0]);
+  } catch { /* fallback below */ }
+
+  if (!stats) {
+    stats = {};
+    const nameM = raw.match(/"name"\s*:\s*"([^"]+)"/);
+    const hpM   = raw.match(/"hp"\s*:\s*(-?\d+)/);
+    const acM   = raw.match(/"ac"\s*:\s*(-?\d+)/);
+    if (nameM) stats.name = nameM[1];
+    if (hpM)   stats.hp   = parseInt(hpM[1]);
+    if (acM)   stats.ac   = parseInt(acM[1]);
+    const modsM = raw.match(/"modifiers"\s*:\s*\[([^\]]+)\]/);
+    if (modsM) {
+      const mods = modsM[1].split(',').map(v => parseInt(v.trim()));
+      if (mods.length >= 2) stats.modifiers = mods;
+    }
+  }
+
+  if (!stats) throw new Error('Could not parse response');
+
+  // DEX is always index 1 in [STR, DEX, CON, INT, WIS, CHA]
+  if (Array.isArray(stats.modifiers) && stats.modifiers.length >= 2) {
+    stats.initMod = stats.modifiers[1];
+  } else if (typeof stats.initMod !== 'number') {
+    stats.initMod = undefined;
+  }
+
+  return stats;
+}
+
 /* ---- Campaign Manager ---- */
 function initCampaignManager() {
   const select = $('#campaign-select');
@@ -119,87 +202,14 @@ function showTokenEditor(existing = null, preloadedFile = null, isVaultPreset = 
     }
   });
 
-  // Ollama Vision - read stat block
+  // Ollama Vision - read stat block (uses extracted ocrStatBlock)
   readBtn?.addEventListener('click', async () => {
     if (!sf) return;
     readBtn.disabled = true;
     readBtn.textContent = t('modal.reading');
 
     try {
-      const b64 = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result.split(',')[1]);
-        r.onerror = rej;
-        r.readAsDataURL(sf);
-      });
-
-      const prompt_text = `Look at this tabletop RPG monster stat block image carefully.
-
-TASK 1 - Find these lines and extract the numbers:
-- NAME: The large bold title at the very top of the card.
-- HP: The line that says "Hit Points" or "Puntos de Golpe". Take only the FIRST integer before any parenthesis. Example: "Hit Points 55 (10d8 + 10)" → 55
-- AC: The line that says "Armor Class" or "Clase de Armadura". Take only the first integer. Example: "Armor Class 12 (Sin armadura)" → 12
-
-TASK 2 - Find the ability scores table:
-The table always has exactly 6 columns in this order: STR | DEX | CON | INT | WIS | CHA
-Under each column header there is a score and a modifier in parentheses.
-Example row: "11 (+0)  14 (+2)  12 (+1)  20 (+5)  16 (+3)  20 (+5)"
-List all 6 modifiers in order as integers (drop the + sign, keep the - sign):
-modifiers: [0, 2, 1, 5, 3, 5]
-The DEX modifier is always the SECOND value in that list.
-
-Respond with ONLY this JSON, no explanation:
-{"name":"...","hp":0,"ac":0,"modifiers":[str,dex,con,int,wis,cha]}`;
-
-      const resp = await fetch('http://localhost:11434/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'gemma4',
-          prompt: prompt_text,
-          images: [b64],
-          stream: false
-          // NO format:'json' — it interferes with vision reasoning
-        })
-      });
-
-      if (!resp.ok) throw new Error(`Ollama error ${resp.status}`);
-      const data = await resp.json();
-      const raw = data.response || '';
-
-      // Robust parser: try JSON first, then regex fallback
-      let stats = null;
-      try {
-        const clean = raw.replace(/```json|```/g, '').trim();
-        const match = clean.match(/\{[\s\S]*?\}/);
-        if (match) stats = JSON.parse(match[0]);
-      } catch { /* fallback below */ }
-
-      // Regex fallback for each field if JSON parse failed
-      if (!stats) {
-        stats = {};
-        const nameM = raw.match(/"name"\s*:\s*"([^"]+)"/);
-        const hpM   = raw.match(/"hp"\s*:\s*(-?\d+)/);
-        const acM   = raw.match(/"ac"\s*:\s*(-?\d+)/);
-        if (nameM) stats.name = nameM[1];
-        if (hpM)   stats.hp   = parseInt(hpM[1]);
-        if (acM)   stats.ac   = parseInt(acM[1]);
-        // Try to extract modifiers array from text
-        const modsM = raw.match(/"modifiers"\s*:\s*\[([^\]]+)\]/);
-        if (modsM) {
-          const mods = modsM[1].split(',').map(v => parseInt(v.trim()));
-          if (mods.length >= 2) stats.modifiers = mods;
-        }
-      }
-
-      if (!stats) throw new Error('Could not parse response');
-
-      // DEX is always index 1 in [STR, DEX, CON, INT, WIS, CHA]
-      if (Array.isArray(stats.modifiers) && stats.modifiers.length >= 2) {
-        stats.initMod = stats.modifiers[1];
-      } else if (typeof stats.initMod !== 'number') {
-        stats.initMod = undefined;
-      }
+      const stats = await ocrStatBlock(sf);
 
       if (stats.name)  ov.querySelector('#m-name').value = stats.name;
       if (stats.hp)    ov.querySelector('#m-hp').value = stats.hp;
@@ -566,8 +576,17 @@ function renderVault() {
 
   c.vault = c.vault || [];
 
-  let html = `<div class="vault-list">`;
-  
+  let html = `
+    <!-- Batch import drop zone -->
+    <div class="vault-drop-zone" id="vault-drop-zone">
+      <div class="vault-drop-inner">
+        <span style="font-size:1.5rem">📁</span>
+        <span style="font-size:0.8rem">${t('vault.batch_drop')}</span>
+      </div>
+    </div>
+    <div class="vault-batch-progress" id="vault-batch-progress" style="display:none"></div>
+    <div class="vault-list">`;
+
   if (!c.vault.length) {
     html += `<div style="color:var(--text-secondary);font-size:0.85rem;padding:0.5rem;text-align:center">${t('vault.empty')}</div>`;
   } else {
@@ -576,7 +595,7 @@ function renderVault() {
       html += `
         <div class="vault-item" data-preset-id="${preset.id}">
           <div class="vault-avatar">
-            ${hasImage 
+            ${hasImage
               ? `<img src="${preset.imgDataUrl}" alt="${esc(preset.name)}">`
               : `<span class="vault-avatar-initial">${preset.name.charAt(0).toUpperCase()}</span>`
             }
@@ -596,12 +615,48 @@ function renderVault() {
       `;
     });
   }
-  
+
   html += `</div>
-    <button class="btn btn-secondary btn-sm" id="btn-add-vault-preset" style="width:100%;margin-top:0.5rem">${t('vault.add_preset')}</button>`;
-    
+    <div style="display:flex;gap:0.4rem;margin-top:0.5rem">
+      <button class="btn btn-secondary btn-sm" id="btn-add-vault-preset" style="flex:1">${t('vault.add_preset')}</button>
+      <button class="btn btn-secondary btn-sm" id="btn-vault-batch" title="${t('vault.batch_import')}" style="flex:0">${t('vault.batch_import')}</button>
+      <button class="btn btn-secondary btn-sm" id="btn-vault-folder" title="${t('vault.batch_folder')}" style="flex:0">${t('vault.batch_folder')}</button>
+    </div>
+    <input type="file" id="vault-file-input" accept="image/*" multiple style="display:none">
+    <input type="file" id="vault-folder-input" webkitdirectory multiple style="display:none">`;
+
   panel.innerHTML = html;
 
+  // --- Batch import: drag & drop on vault drop zone ---
+  _initVaultDropZone(panel);
+
+  // --- Batch import: multi-file button ---
+  panel.querySelector('#btn-vault-batch')?.addEventListener('click', () => {
+    document.getElementById('vault-file-input')?.click();
+  });
+  document.getElementById('vault-file-input')?.addEventListener('change', (e) => {
+    if (e.target.files?.length) processBatchImages(e.target.files);
+    e.target.value = '';
+  });
+
+  // --- Batch import: folder button ---
+  panel.querySelector('#btn-vault-folder')?.addEventListener('click', () => {
+    document.getElementById('vault-folder-input')?.click();
+  });
+  document.getElementById('vault-folder-input')?.addEventListener('change', (e) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    // Filter to images only
+    const images = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (!images.length) {
+      _showBatchToast(t('vault.batch_empty'));
+    } else {
+      processBatchImages(images);
+    }
+    e.target.value = '';
+  });
+
+  // --- Standard vault actions ---
   panel.querySelectorAll('[data-act="spawn-preset"]').forEach(b => {
     b.addEventListener('click', () => {
       const presetId = b.dataset.presetId;
@@ -625,6 +680,145 @@ function renderVault() {
   panel.querySelector('#btn-add-vault-preset')?.addEventListener('click', () => {
     showTokenEditor(null, null, true);
   });
+}
+
+/* ---- Batch image import (Vault drop zone) ---- */
+
+function _initVaultDropZone(panel) {
+  const dropZone = panel.querySelector('#vault-drop-zone');
+  if (!dropZone) return;
+  let counter = 0;
+
+  dropZone.addEventListener('dragenter', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    counter++;
+    dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    counter--;
+    if (counter <= 0) { counter = 0; dropZone.classList.remove('drag-over'); }
+  });
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault(); e.stopPropagation();
+  });
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    counter = 0;
+    dropZone.classList.remove('drag-over');
+    const files = e.dataTransfer?.files;
+    if (!files?.length) return;
+    const images = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (images.length) processBatchImages(images);
+  });
+}
+
+/**
+ * Process multiple image files: compress → OCR → vault.
+ * Shows inline progress in the vault panel.
+ */
+async function processBatchImages(files) {
+  const progressEl = document.getElementById('vault-batch-progress');
+  const { compressImage } = await import('./utils.js');
+  let added = 0;
+
+  if (progressEl) {
+    progressEl.style.display = 'block';
+    progressEl.innerHTML = '';
+  }
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const idx = i + 1;
+    const total = files.length;
+
+    if (progressEl) {
+      progressEl.innerHTML = `<span>${t('vault.batch_processing', { current: idx, total, name: file.name })}</span>`;
+    }
+
+    // 1. Compress image
+    let imageId = null, imgDataUrl = null;
+    try {
+      const { dataUrl } = await compressImage(file);
+      imgDataUrl = dataUrl;
+      imageId = uid();
+    } catch (e) {
+      // Compression failed — still try to OCR without image
+      console.warn('Image compression failed for', file.name, e);
+    }
+
+    // 2. OCR with Ollama
+    let ocrResult = null;
+    try {
+      ocrResult = await ocrStatBlock(file);
+    } catch {
+      // Ollama not available or failed — use filename as fallback
+    }
+
+    // 3. Save image to IndexedDB if we have compressed data
+    if (imgDataUrl && imageId) {
+      try {
+        await _saveImageToDB(imageId, imgDataUrl);
+      } catch { /* image save failed, proceed without */ }
+    }
+
+    // 4. Create vault preset
+    const name = ocrResult?.name || file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
+    const maxHp = ocrResult?.hp || 30;
+    const ac = ocrResult?.ac || 12;
+    const initMod = ocrResult?.initMod ?? 0;
+
+    await state.addPresetToVaultBatch({ name, maxHp, ac, initMod, imageId, imgDataUrl });
+    added++;
+
+    // Update progress line
+    if (progressEl) {
+      const statusKey = ocrResult ? 'vault.batch_ok' : 'vault.batch_fallback';
+      progressEl.innerHTML = progressEl.innerHTML +
+        `<br><span style="font-size:0.75rem;color:${ocrResult ? 'var(--success,#22c55e)' : 'var(--text-secondary)'}">${t(statusKey, { name, hp: maxHp, ac })}</span>`;
+    }
+  }
+
+  // Done
+  if (progressEl) {
+    progressEl.innerHTML = `<span style="color:var(--success,#22c55e);font-weight:600">${t('vault.batch_done', { count: added })}</span>`;
+    setTimeout(() => { progressEl.style.display = 'none'; }, 4000);
+  }
+
+  renderAll();
+}
+
+/* ---- IndexedDB image helper (used by batch import) ---- */
+function _saveImageToDB(id, dataUrl) {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('dmboard_images', 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains('images')) {
+        req.result.createObjectStore('images');
+      }
+    };
+    req.onsuccess = () => {
+      const tx = req.result.transaction('images', 'readwrite');
+      tx.objectStore('images').put(dataUrl, id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function _showBatchToast(message) {
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = [
+    'position:fixed', 'bottom:1.5rem', 'left:50%', 'transform:translateX(-50%)',
+    'background:var(--accent,#6366f1)', 'color:#fff', 'padding:0.6rem 1.2rem',
+    'border-radius:0.5rem', 'font-size:0.9rem', 'z-index:9999',
+    'box-shadow:0 4px 12px rgba(0,0,0,.4)', 'pointer-events:none',
+    'opacity:1', 'transition:opacity 0.4s'
+  ].join(';');
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 4000);
 }
 
 /* ---- Sidebar Tabs ---- */

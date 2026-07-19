@@ -88,6 +88,14 @@ const translations = {
     'vault.delete_title':      'Eliminar',
     'vault.confirm.delete':    '¿Eliminar la plantilla de "{name}" del almacén?',
     'vault.saved_alert':       '"{name}" guardado en el Almacén.',
+    'vault.batch_import':      '📁 Importar en lote',
+    'vault.batch_folder':      '📂 Seleccionar carpeta',
+    'vault.batch_drop':        'Suelta imágenes aquí para importar',
+    'vault.batch_processing':  '⏳ {current}/{total}: {name}',
+    'vault.batch_ok':          '✅ {name} → {hp} HP, CA {ac}',
+    'vault.batch_fallback':    '⚠️ {name} → sin stats (usa valores por defecto)',
+    'vault.batch_done':        '✅ {count} criaturas añadidas al almacén.',
+    'vault.batch_empty':       'No se encontraron imágenes en la carpeta seleccionada.',
 
     /* ---- Token Editor Modal ---- */
     'modal.new_creature':      'Nueva Criatura',
@@ -193,6 +201,14 @@ const translations = {
     'vault.delete_title':      'Delete',
     'vault.confirm.delete':    'Delete template "{name}" from the vault?',
     'vault.saved_alert':       '"{name}" saved to the Vault.',
+    'vault.batch_import':      '📁 Batch Import',
+    'vault.batch_folder':      '📂 Select folder',
+    'vault.batch_drop':        'Drop images here to import',
+    'vault.batch_processing':  '⏳ {current}/{total}: {name}',
+    'vault.batch_ok':          '✅ {name} → {hp} HP, AC {ac}',
+    'vault.batch_fallback':    '⚠️ {name} → no stats (using defaults)',
+    'vault.batch_done':        '✅ {count} creatures added to the vault.',
+    'vault.batch_empty':       'No images found in the selected folder.',
 
     /* ---- Token Editor Modal ---- */
     'modal.new_creature':      'New Creature',
