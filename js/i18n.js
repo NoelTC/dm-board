@@ -69,6 +69,10 @@ const translations = {
     'initiative.hp_label':     'HP:',
     'initiative.badge.player': 'PJ',
     'initiative.badge.npc':    'PNJ',
+    'initiative.dead':         'MUERTO',
+    'initiative.death_saves':  'Tiradas de muerte:',
+    'timer.pause':             'Pausar / Reanudar temporizador',
+    'timer.reset':             'Reiniciar temporizador',
 
     /* ---- Locations panel ---- */
     'locations.title':         '🗺️ Localizaciones',
@@ -182,6 +186,10 @@ const translations = {
     'initiative.hp_label':     'HP:',
     'initiative.badge.player': 'PC',
     'initiative.badge.npc':    'NPC',
+    'initiative.dead':         'DEAD',
+    'initiative.death_saves':  'Death saves:',
+    'timer.pause':             'Pause / Resume timer',
+    'timer.reset':             'Restart timer',
 
     /* ---- Locations panel ---- */
     'locations.title':         '🗺️ Locations',

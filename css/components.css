@@ -374,6 +374,98 @@
 .initiative-hp .btn-sm:hover {
   background: var(--border);
 }
+.init-delta-input {
+  -moz-appearance: textfield;
+}
+.init-delta-input::-webkit-inner-spin-button,
+.init-delta-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* ---- Death saves ---- */
+.init-hp-bar-fill.hp-dead {
+  background-color: var(--danger);
+  opacity: 0.5;
+}
+.initiative-entry.dead {
+  opacity: 0.55;
+}
+.initiative-entry.dead .initiative-name {
+  text-decoration: line-through;
+}
+.death-save-row {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.1rem;
+}
+.death-save-slot {
+  width: 1.7rem;
+  height: 1.7rem;
+  border: 2px solid var(--border);
+  border-radius: 0.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  user-select: none;
+  background: transparent;
+  color: var(--text-secondary);
+}
+.death-save-slot:hover {
+  border-color: var(--accent);
+}
+.death-save-slot.success.filled {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+.death-save-slot.failure.filled {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+/* ---- Turn timer ---- */
+.turn-timer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.3rem;
+  gap: 0.3rem;
+}
+.turn-timer {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.35rem;
+  min-width: 5rem;
+  text-align: center;
+  transition: color 0.3s, background 0.3s;
+}
+.turn-timer.urgent {
+  color: #fff;
+  background: var(--danger);
+  animation: pulse-urgent 0.5s infinite alternate;
+}
+.turn-timer.paused {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+@keyframes pulse-urgent {
+  from { opacity: 1; }
+  to   { opacity: 0.7; }
+}
+.timer-controls {
+  display: flex;
+  gap: 0.2rem;
+}
 .initiative-ac {
   font-family: var(--number-font);
   font-weight: 600;

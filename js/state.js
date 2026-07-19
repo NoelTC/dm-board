@@ -23,7 +23,7 @@ function openImageDB() {
   });
 }
 
-async function saveImage(id, dataUrl) {
+export async function saveImage(id, dataUrl) {
   const db = await openImageDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('images', 'readwrite');
@@ -452,20 +452,74 @@ class StateManager {
     return this._withActive(c => {
       const e = c.initiative.find(en => en.id === entryId);
       if (!e) return;
+
+      // Lethal-damage check: if HP is being set to 0 and the excess
+      // damage exceeds half max HP, instant death (no death saves).
+      if ('hp' in updates && updates.hp <= 0 && e.maxHp > 0) {
+        const excess = Math.abs(updates.hp);  // how far below zero
+        if (excess > e.maxHp / 2) {
+          e.isDead = true;
+          e.hp = 0;
+          // Sync to source
+          this._syncHpToSource(e, 0);
+          return;
+        }
+      }
+
       Object.assign(e, updates);
       // Sync HP back to source (directly, without triggering another _notify)
       if ('hp' in updates) {
         const hp = Math.max(0, Math.min(updates.hp, e.maxHp));
         e.hp = hp;
-        if (e.type === 'token') {
-          const t = c.tokens.find(tk => tk.id === e.refId);
-          if (t) t.hp = hp;
-        } else {
-          const p = c.players.find(pl => pl.id === e.refId);
-          if (p) p.hp = hp;
+        // Initialize death saves when HP hits 0
+        if (hp === 0 && !e.isDead && !e.deathSaves) {
+          e.deathSaves = { successes: 0, failures: 0 };
         }
+        // Clear death saves if healed above 0
+        if (hp > 0 && e.deathSaves) {
+          delete e.deathSaves;
+        }
+        this._syncHpToSource(e, hp);
       }
     });
+  }
+
+  /**
+   * Add a death save result (success or failure).
+   * - 3 successes → revive with 1 HP
+   * - 3 failures → dead
+   */
+  addDeathSave(entryId, type) {
+    return this._withActive(c => {
+      const e = c.initiative.find(en => en.id === entryId);
+      if (!e || !e.deathSaves || e.isDead) return;
+      if (type !== 'success' && type !== 'failure') return;
+      // Cap at 3 — extra clicks are ignored
+      if (e.deathSaves[type === 'success' ? 'successes' : 'failures'] >= 3) return;
+
+      e.deathSaves.successes += (type === 'success' ? 1 : 0);
+      e.deathSaves.failures  += (type === 'failure'  ? 1 : 0);
+
+      if (e.deathSaves.successes >= 3) {
+        e.hp = 1;
+        delete e.deathSaves;
+        this._syncHpToSource(e, 1);
+      } else if (e.deathSaves.failures >= 3) {
+        e.isDead = true;
+        delete e.deathSaves;
+      }
+    });
+  }
+
+  /** Sync HP from initiative entry back to token/player. */
+  _syncHpToSource(e, hp) {
+    if (e.type === 'token') {
+      const t = (this.active?.tokens || []).find(tk => tk.id === e.refId);
+      if (t) t.hp = hp;
+    } else {
+      const p = (this.active?.players || []).find(pl => pl.id === e.refId);
+      if (p) p.hp = hp;
+    }
   }
 
   sortInitiative() {
@@ -482,11 +536,19 @@ class StateManager {
   nextTurn() {
     return this._withActive(c => {
       if (c.initiative.length === 0) return;
-      c.activeTurnIndex++;
-      if (c.activeTurnIndex >= c.initiative.length) {
-        c.activeTurnIndex = 0;
-        c.round++;
-      }
+      const alive = c.initiative.filter(e => !e.isDead);
+      if (alive.length === 0) return; // everyone's dead — stop advancing
+
+      // Advance at least one step, skipping dead entries
+      let steps = 0;
+      do {
+        c.activeTurnIndex++;
+        if (c.activeTurnIndex >= c.initiative.length) {
+          c.activeTurnIndex = 0;
+          c.round++;
+        }
+        steps++;
+      } while (c.initiative[c.activeTurnIndex]?.isDead && steps < c.initiative.length);
     });
   }
 

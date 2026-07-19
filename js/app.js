@@ -3,13 +3,70 @@
    Surgical DOM updates. HP delta input. Global image toggle.
    ============================================================ */
 
-import { state } from './state.js';
+import { state, saveImage } from './state.js';
 import { uid, clamp } from './utils.js';
 import { renderBoard, clearBoardCache, removeTokenFromCache, toggleAllTokenImages } from './board.js';
 import { initThemeSystem, applyTheme } from './themes.js';
 import { t, getLang, setLanguage, applyI18n } from './i18n.js';
 
 const $ = (s) => document.querySelector(s);
+
+/* ---- Turn Timer ---- */
+let _turnTimer = null;   // { intervalId, remaining, paused }
+const TURN_SECONDS = 60;
+
+function _startTurnTimer() {
+  _stopTurnTimer(); // clear any existing
+  _turnTimer = { remaining: TURN_SECONDS, paused: false, intervalId: null };
+  _turnTimer.intervalId = setInterval(() => {
+    if (_turnTimer.paused) return;
+    _turnTimer.remaining--;
+    _updateTimerDisplay();
+    if (_turnTimer.remaining <= 0) {
+      _stopTurnTimer();
+      state.nextTurn();
+      state._save(); state._notify();
+      renderAll();
+      _startTurnTimer();
+    }
+  }, 1000);
+  _updateTimerDisplay();
+}
+
+function _stopTurnTimer() {
+  if (_turnTimer?.intervalId) clearInterval(_turnTimer.intervalId);
+  _turnTimer = null;
+  _updateTimerDisplay();
+}
+
+function _togglePauseTimer() {
+  if (!_turnTimer) return;
+  _turnTimer.paused = !_turnTimer.paused;
+  _updateTimerDisplay();
+}
+
+function _resetTurnTimer() {
+  _stopTurnTimer();
+  _startTurnTimer();
+}
+
+function _updateTimerDisplay() {
+  const el = document.getElementById('turn-timer');
+  if (!el) return;
+  if (!_turnTimer) {
+    el.textContent = '⏱ --:--';
+    el.className = 'turn-timer';
+    return;
+  }
+  const m = Math.floor(_turnTimer.remaining / 60);
+  const s = _turnTimer.remaining % 60;
+  el.textContent = `⏱ ${m}:${String(s).padStart(2, '0')}`;
+  el.className = 'turn-timer' +
+    (_turnTimer.remaining <= 10 ? ' urgent' : '') +
+    (_turnTimer.paused ? ' paused' : '');
+}
+
+/* ---- Campaign Manager ---- */
 
 /* ---- Ollama OCR (reusable) ---- */
 
@@ -281,7 +338,7 @@ function renderPlayers() {
   if (!c) return;
 
   let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem">
-    <h3 style="margin:0">${t('players.title')}</h3><button class="btn btn-sm btn-primary" id="btn-add-p">＋</button></div><div id="player-list">`;
+    <h3 style="margin:0">${t('players.title')}</h3></div><div id="player-list">`;
 
   if (!c.players.length) html += `<div style="color:var(--text-secondary);font-size:0.85rem;padding:0.5rem">${t('players.empty')}</div>`;
 
@@ -299,7 +356,7 @@ function renderPlayers() {
       <button class="btn btn-sm btn-danger" data-del="${p.id}" title="${t('header.delete_campaign')}">×</button>
     </div>`;
   });
-  html += `</div><button class="btn btn-sm btn-secondary" id="btn-add-p2" style="margin-top:0.4rem;width:100%">${t('players.add')}</button>`;
+  html += `</div><button class="btn btn-sm btn-secondary" id="btn-add-p" style="margin-top:0.4rem;width:100%">${t('players.add')}</button>`;
   panel.innerHTML = html;
 
   const addP = () => {
@@ -313,7 +370,6 @@ function renderPlayers() {
     renderPlayers();
   };
   panel.querySelector('#btn-add-p')?.addEventListener('click', addP);
-  panel.querySelector('#btn-add-p2')?.addEventListener('click', addP);
 
   panel.querySelectorAll('.hp-up').forEach(b => {
     b.addEventListener('click', () => playerDelta(b.dataset.pid, 1));
@@ -340,8 +396,38 @@ function playerDelta(pid, dir) {
   const p = c.players.find(pl => pl.id === pid); if (!p) return;
   const inp = document.querySelector(`[data-pid="${pid}"][data-act="php"]`);
   const d = inp ? (parseInt(inp.dataset.delta) || 1) : 1;
-  state.updatePlayer(pid, { hp: clamp(p.hp + dir * d, 0, p.maxHp) });
-  renderPlayers();
+  const newHp = p.hp + dir * d;
+
+  if (newHp <= 0) {
+    const excess = Math.abs(newHp);
+    if (excess > p.maxHp / 2) {
+      // Instant death
+      state.updatePlayer(pid, { hp: 0 });
+      // Also mark initiative entry as dead
+      c.initiative.forEach(e => {
+        if (e.refId === pid && e.type === 'player') { e.isDead = true; e.hp = 0; }
+      });
+    } else {
+      state.updatePlayer(pid, { hp: 0 });
+      // Init death saves in initiative entry if present
+      c.initiative.forEach(e => {
+        if (e.refId === pid && e.type === 'player' && !e.isDead) {
+          e.hp = 0;
+          if (!e.deathSaves) e.deathSaves = { successes: 0, failures: 0 };
+        }
+      });
+    }
+  } else {
+    state.updatePlayer(pid, { hp: Math.min(newHp, p.maxHp) });
+    // Clear death saves if healed
+    c.initiative.forEach(e => {
+      if (e.refId === pid && e.type === 'player') {
+        e.hp = Math.min(newHp, p.maxHp);
+        if (e.deathSaves) delete e.deathSaves;
+      }
+    });
+  }
+  renderAll();
 }
 
 /* ---- Initiative ---- */
@@ -350,7 +436,14 @@ function renderInitiative() {
   if (!c) return;
 
   let html = `<div class="initiative-header"><h3 style="margin:0">${t('initiative.title')}</h3>
-    ${c.round > 0 ? `<span class="round-counter">${t('initiative.round')} ${c.round}</span>` : ''}</div>`;
+    ${c.round > 0 ? `<span class="round-counter">${t('initiative.round')} ${c.round}</span>` : ''}</div>
+    <div class="turn-timer-row">
+      <span class="turn-timer" id="turn-timer">⏱ --:--</span>
+      ${c.initiative.length ? `<div class="timer-controls">
+        <button class="btn btn-sm btn-secondary" id="btn-timer-pause" title="${t('timer.pause')}">⏯</button>
+        <button class="btn btn-sm btn-secondary" id="btn-timer-reset" title="${t('timer.reset')}">🔄</button>
+      </div>` : ''}
+    </div>`;
 
   if (!c.initiative.length) {
     html += `<div style="color:var(--text-secondary);font-size:0.85rem;padding:0.5rem;text-align:center">${t('initiative.empty')}</div>`;
@@ -358,37 +451,28 @@ function renderInitiative() {
     html += '<ul class="initiative-list">';
     c.initiative.forEach((e, i) => {
       const active = i === c.activeTurnIndex ? ' active-turn' : '';
-      let hpStatus = 'hp-healthy';
+      const deadClass = e.isDead ? ' dead' : '';
       const hpPct = e.maxHp > 0 ? (e.hp / e.maxHp) : 0;
-      if (hpPct <= 0.25) hpStatus = 'hp-critical';
+      let hpStatus = 'hp-healthy';
+      if (e.isDead) hpStatus = 'hp-dead';
+      else if (hpPct <= 0.25) hpStatus = 'hp-critical';
       else if (hpPct <= 0.5) hpStatus = 'hp-injured';
       const widthPct = Math.max(0, Math.min(100, hpPct * 100));
       const badge = e.type === 'player' ? t('initiative.badge.player') : t('initiative.badge.npc');
 
-      html += `<li class="initiative-entry${active}" data-eid="${e.id}">
+      html += `<li class="initiative-entry${active}${deadClass}" data-eid="${e.id}">
         <div class="init-row-main">
           <div class="init-left">
-            <span class="initiative-roll">${e.roll}</span>
+            <span class="initiative-roll">${e.isDead ? '💀' : e.roll}</span>
             <span class="initiative-name" title="${esc(e.name)}">${esc(e.name)}</span>
-            <span class="init-badge ${e.type}">${badge}</span>
+            <span class="init-badge ${e.type}">${e.isDead ? '💀' : badge}</span>
           </div>
           <div class="init-right">
             <span class="initiative-ac">🛡️ ${e.ac}</span>
           </div>
         </div>
         <div class="init-row-hp">
-          <div class="init-hp-progress-container">
-            <div class="init-hp-text">${t('initiative.hp_label')} <strong>${e.hp}</strong> / ${e.maxHp}</div>
-            <div class="init-hp-bar-bg">
-              <div class="init-hp-bar-fill ${hpStatus}" style="width: ${widthPct}%"></div>
-            </div>
-          </div>
-          <div class="initiative-hp">
-            <button class="btn btn-sm hp-down" data-eid="${e.id}">−</button>
-            <input type="number" class="token-hp-input stat-number ${e.hp <= e.maxHp * 0.25 ? 'hp-low' : ''}"
-                   value="${e.hp}" data-eid="${e.id}" data-act="ihp" data-delta="1" min="0" max="${e.maxHp}">
-            <button class="btn btn-sm hp-up" data-eid="${e.id}">＋</button>
-          </div>
+          ${_renderInitiativeHpRow(e)}
         </div>
       </li>`;
     });
@@ -407,7 +491,6 @@ function renderInitiative() {
 
   panel.querySelector('#btn-gen')?.addEventListener('click', () => {
     state.generateInitiative();
-    // Prompt for player rolls
     c.initiative.forEach(e => {
       if (e.type === 'player') {
         const r = prompt(`${t('initiative.prompt.set')} ${e.name}:`, '10');
@@ -416,14 +499,35 @@ function renderInitiative() {
       }
     });
     state.sortInitiative();
+    // Always start at the highest roller
+    if (c.initiative.length > 0) c.activeTurnIndex = 0;
     state._save(); state._notify();
     renderAll();
+    _startTurnTimer();
   });
-  panel.querySelector('#btn-next')?.addEventListener('click', () => { state.nextTurn(); renderAll(); });
-  panel.querySelector('#btn-prev')?.addEventListener('click', () => { state.prevTurn(); renderAll(); });
+  panel.querySelector('#btn-next')?.addEventListener('click', () => {
+    state.nextTurn();
+    state._save(); state._notify();
+    renderAll();
+    _startTurnTimer();
+  });
+  panel.querySelector('#btn-prev')?.addEventListener('click', () => {
+    state.prevTurn();
+    state._save(); state._notify();
+    renderAll();
+    _startTurnTimer();
+  });
   panel.querySelector('#btn-clr')?.addEventListener('click', () => {
-    if (confirm(t('initiative.confirm.clear'))) { state.clearInitiative(); renderAll(); }
+    if (confirm(t('initiative.confirm.clear'))) { _stopTurnTimer(); state.clearInitiative(); renderAll(); }
   });
+
+  // Timer controls
+  panel.querySelector('#btn-timer-pause')?.addEventListener('click', () => {
+    _togglePauseTimer();
+    const btn = panel.querySelector('#btn-timer-pause');
+    if (btn) btn.textContent = _turnTimer?.paused ? '▶' : '⏯';
+  });
+  panel.querySelector('#btn-timer-reset')?.addEventListener('click', () => _resetTurnTimer());
 
   // Roll modification on click
   panel.querySelectorAll('.initiative-roll').forEach(rollSpan => {
@@ -441,28 +545,125 @@ function renderInitiative() {
     });
   });
 
-  // HP buttons
+  // HP buttons — use delta value from adjacent input
   panel.querySelectorAll('.hp-up').forEach(b => {
-    b.addEventListener('click', () => initDelta(b.dataset.eid, 1));
+    b.addEventListener('click', () => initDelta(b.dataset.eid, 1, b));
   });
   panel.querySelectorAll('.hp-down').forEach(b => {
-    b.addEventListener('click', () => initDelta(b.dataset.eid, -1));
+    b.addEventListener('click', () => initDelta(b.dataset.eid, -1, b));
   });
-  panel.querySelectorAll('[data-act="ihp"]').forEach(inp => {
-    inp.addEventListener('input', () => {
-      const v = parseInt(inp.value); const eid = inp.dataset.eid;
-      if (!isNaN(v)) state.updateInitiativeEntry(eid, { hp: clamp(v, 0, 999) });
+
+  // Delta input — store value on change / Enter
+  panel.querySelectorAll('.init-delta-input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const eid = inp.dataset.eid;
+      // Store delta on the HP button dataset
+      const hpDown = panel.querySelector(`.hp-down[data-eid="${eid}"]`);
+      const hpUp = panel.querySelector(`.hp-up[data-eid="${eid}"]`);
+      const val = Math.max(1, parseInt(inp.value) || 1);
+      if (hpDown) hpDown.dataset.delta = val;
+      if (hpUp) hpUp.dataset.delta = val;
+      inp.value = val;
     });
-    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { inp.dataset.delta = inp.value; inp.blur(); } });
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { inp.blur(); }
+    });
+    // Initial value
+    inp.value = parseInt(inp.value) || 1;
+  });
+
+  // Death save click handlers
+  panel.querySelectorAll('.death-save-slot').forEach(slot => {
+    slot.addEventListener('click', () => {
+      const eid = slot.dataset.eid;
+      const type = slot.dataset.type;
+      state.addDeathSave(eid, type);
+      state._save(); state._notify();
+      renderAll();
+    });
   });
 }
 
-function initDelta(eid, dir) {
+/**
+ * Render the HP row of an initiative entry.
+ * Shows death saves when hp==0, otherwise the normal HP bar + delta controls.
+ */
+function _renderInitiativeHpRow(e) {
+  // --- Dead ---
+  if (e.isDead) {
+    return `<div class="init-hp-progress-container">
+      <div class="init-hp-text" style="color:var(--danger)">💀 ${t('initiative.dead')}</div>
+      <div class="init-hp-bar-bg"><div class="init-hp-bar-fill hp-dead" style="width:0%"></div></div>
+    </div>`;
+  }
+
+  // --- Dying (death saves) ---
+  if (e.hp === 0 && !e.isDead) {
+    const sCount = e.deathSaves?.successes || 0;
+    const fCount = e.deathSaves?.failures || 0;
+
+    // Success row (top) — 3 boxes, click to mark ✓
+    let successBoxes = '';
+    for (let i = 0; i < 3; i++) {
+      const filled = i < sCount;
+      successBoxes += `<span class="death-save-slot success${filled ? ' filled' : ''}"
+        data-eid="${e.id}" data-type="success">${filled ? '✓' : ''}</span>`;
+    }
+
+    // Failure row (bottom) — 3 boxes, click to mark ✗
+    let failureBoxes = '';
+    for (let i = 0; i < 3; i++) {
+      const filled = i < fCount;
+      failureBoxes += `<span class="death-save-slot failure${filled ? ' filled' : ''}"
+        data-eid="${e.id}" data-type="failure">${filled ? '✗' : ''}</span>`;
+    }
+
+    return `<div class="init-hp-progress-container">
+      <div class="init-hp-text" style="color:var(--danger)">${t('initiative.death_saves')}</div>
+      <div class="death-save-row">${successBoxes}</div>
+      <div class="death-save-row">${failureBoxes}</div>
+    </div>`;
+  }
+
+  // --- Normal ---
+  const hpPct = e.maxHp > 0 ? (e.hp / e.maxHp) : 0;
+  let hpStatus = 'hp-healthy';
+  if (hpPct <= 0.25) hpStatus = 'hp-critical';
+  else if (hpPct <= 0.5) hpStatus = 'hp-injured';
+  const widthPct = Math.max(0, Math.min(100, hpPct * 100));
+
+  return `<div class="init-hp-progress-container">
+    <div class="init-hp-text">${t('initiative.hp_label')} <strong>${e.hp}</strong> / ${e.maxHp}</div>
+    <div class="init-hp-bar-bg">
+      <div class="init-hp-bar-fill ${hpStatus}" style="width: ${widthPct}%"></div>
+    </div>
+  </div>
+  <div class="initiative-hp">
+    <button class="btn btn-sm hp-down" data-eid="${e.id}" data-delta="1">−</button>
+    <input type="number" class="init-delta-input" value="1" min="1" max="999"
+           data-eid="${e.id}" style="width:2.8rem;text-align:center">
+    <button class="btn btn-sm hp-up" data-eid="${e.id}" data-delta="1">＋</button>
+  </div>`;
+}
+
+function initDelta(eid, dir, btn) {
   const c = state.active; if (!c) return;
   const e = c.initiative.find(en => en.id === eid); if (!e) return;
-  const inp = document.querySelector(`[data-eid="${eid}"][data-act="ihp"]`);
-  const d = inp ? (parseInt(inp.dataset.delta) || 1) : 1;
-  state.updateInitiativeEntry(eid, { hp: clamp(e.hp + dir * d, 0, e.maxHp) });
+  const d = btn ? (parseInt(btn.dataset.delta) || 1) : 1;
+  const newHp = e.hp + dir * d;
+
+  if (newHp <= 0) {
+    // Lethal damage check: if damage exceeds half max HP, instant death
+    const excess = Math.abs(newHp);  // how far below 0
+    if (excess > e.maxHp / 2) {
+      state.updateInitiativeEntry(eid, { hp: -excess }); // triggers lethal in state
+    } else {
+      state.updateInitiativeEntry(eid, { hp: 0 });
+    }
+  } else {
+    state.updateInitiativeEntry(eid, { hp: Math.min(newHp, e.maxHp) });
+  }
+  state._save(); state._notify();
   renderAll();
 }
 
@@ -758,7 +959,7 @@ async function processBatchImages(files) {
     // 3. Save image to IndexedDB if we have compressed data
     if (imgDataUrl && imageId) {
       try {
-        await _saveImageToDB(imageId, imgDataUrl);
+        await saveImage(imageId, imgDataUrl);
       } catch { /* image save failed, proceed without */ }
     }
 
@@ -786,25 +987,6 @@ async function processBatchImages(files) {
   }
 
   renderAll();
-}
-
-/* ---- IndexedDB image helper (used by batch import) ---- */
-function _saveImageToDB(id, dataUrl) {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open('dmboard_images', 1);
-    req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains('images')) {
-        req.result.createObjectStore('images');
-      }
-    };
-    req.onsuccess = () => {
-      const tx = req.result.transaction('images', 'readwrite');
-      tx.objectStore('images').put(dataUrl, id);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    };
-    req.onerror = () => reject(req.error);
-  });
 }
 
 function _showBatchToast(message) {
@@ -968,7 +1150,7 @@ async function init() {
   // Keyboard
   document.addEventListener('keydown', e => {
     if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-    if (e.code === 'Space') { e.preventDefault(); state.nextTurn(); renderAll(); }
+    if (e.code === 'Space') { e.preventDefault(); state.nextTurn(); state._save(); state._notify(); renderAll(); _startTurnTimer(); }
     if (e.code === 'KeyN' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); showTokenEditor(); }
     if (e.code === 'KeyI' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); state.generateInitiative(); renderAll(); }
   });
