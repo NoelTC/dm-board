@@ -12,6 +12,14 @@
 
 const STORAGE_KEY = 'dmboard_lang';
 
+// Safe localStorage access (fails gracefully in non-browser contexts)
+function _storageGet(key, def) {
+  try { return localStorage.getItem(key) || def; } catch { return def; }
+}
+function _storageSet(key, val) {
+  try { localStorage.setItem(key, val); } catch { /* ignore */ }
+}
+
 const translations = {
   es: {
     /* ---- Page / Header ---- */
@@ -225,7 +233,7 @@ const translations = {
 };
 
 // ---- Runtime state ----
-let _lang = localStorage.getItem(STORAGE_KEY) || 'es';
+let _lang = _storageGet(STORAGE_KEY, 'es');
 const _listeners = [];
 
 /** Get current language code */
@@ -252,7 +260,7 @@ export function t(key, vars = {}) {
 export function setLanguage(lang) {
   if (!translations[lang]) return;
   _lang = lang;
-  localStorage.setItem(STORAGE_KEY, lang);
+  _storageSet(STORAGE_KEY, lang);
   document.documentElement.lang = lang;
   applyI18n();
   _listeners.forEach(fn => fn(lang));

@@ -7,7 +7,7 @@ import { state } from './state.js';
 import { uid, clamp } from './utils.js';
 import { renderBoard, clearBoardCache, removeTokenFromCache, toggleAllTokenImages } from './board.js';
 import { initThemeSystem, applyTheme } from './themes.js';
-import { t, getLang, setLanguage, applyI18n, onLangChange } from './i18n.js';
+import { t, getLang, setLanguage, applyI18n } from './i18n.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -704,17 +704,22 @@ function initLangToggle() {
   if (!btn) return;
 
   btn.addEventListener('click', () => {
+    // Toggle language
     const newLang = getLang() === 'es' ? 'en' : 'es';
-    setLanguage(newLang);
-    // Rebuild board tokens so HP/AC labels update
-    clearBoardCache();
-    renderAll();
-  });
 
-  // When language changes (from any source), sync static data-i18n elements
-  // and the expand button text
-  onLangChange(() => {
-    applyI18n();
+    // 1. Update internal state + static data-i18n elements
+    setLanguage(newLang);
+
+    // 2. Explicitly update the toggle button text (direct fallback)
+    btn.textContent = t('header.lang_toggle');
+
+    // 3. Rebuild board tokens (so HP/AC labels update)
+    clearBoardCache();
+
+    // 4. Re-render all dynamic panels with new language
+    renderAll();
+
+    // 5. Sync expand button text if it's currently in compact mode
     const expandBtn = $('#btn-toggle-size');
     if (expandBtn) {
       const isExpanded = expandBtn.dataset.expanded === 'true';
